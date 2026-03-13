@@ -1,0 +1,13 @@
+{
+  "name": "planner-schedule-generator",
+  "version": "1.0.0",
+  "description": "Generates a PDF planner schedule by repeating a template page and stamping PT-BR dates",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "example": "node example.js"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}
