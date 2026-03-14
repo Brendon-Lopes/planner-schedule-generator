@@ -18,32 +18,38 @@ npm install
 
 ## Usage
 
-The library exposes a single async function.  No CLI arguments are needed – configure everything through the function parameters.
+The library exposes a single async function. No CLI arguments are needed – configure everything through the function parameters.
 
 ```js
 import { generatePlannerSchedule } from './src/index.js';
 
 await generatePlannerSchedule({
-  templatePath: './template.pdf',   // path to your template PDF
-  outputPath:   './output.pdf',     // where to write the result
+  templatePath: './template.pdf', // path to your template PDF
+  outputPath: './output.pdf', // where to write the result
 
-  startDate:  new Date('2026-03-17'),  // first date to print
-  totalPages: 7,                        // how many pages to generate
+  startDate: new Date(2026, 2, 17), // first date to print (local date, avoids timezone shifts)
+  totalPages: 7, // how many pages to generate
 
   // 2 dates per page → each page advances 2 calendar days
   datesPerPage: 2,
 
   // (x, y) measured from the bottom-left corner of the page (pdf-lib convention)
   datePositions: [
-    { x: 60, y: 680 },   // top slot
-    { x: 60, y: 370 },   // bottom slot
+    { x: 60, y: 680 }, // top slot
+    { x: 60, y: 370 }, // bottom slot
   ],
 
-  font:      'Helvetica',          // built-in font name, or path to a .ttf/.otf
-  fontSize:  14,                   // point size
+  // Horizontal anchor for datePositions[].x: 'left' (default) or 'right'
+  dateXAnchor: 'left',
+
+  font: 'Helvetica', // built-in font name, or path to a .ttf/.otf
+  fontSize: 14, // point size
   textColor: { r: 0, g: 0, b: 0 }, // black  (each channel: 0–1)
 
-  templatePageIndex: 0,            // which page of the template to repeat
+  templatePageIndex: 0, // which page of the template to repeat
+
+  // Reuse the template page object on all pages (usually much smaller PDF)
+  templatePageReuse: true,
 });
 ```
 
@@ -66,38 +72,40 @@ node example.js
 
 ### `generatePlannerSchedule(options)` → `Promise<Uint8Array>`
 
-| Option              | Type                          | Default        | Description |
-|---------------------|-------------------------------|----------------|-------------|
-| `templatePath`      | `string`                      | **required**   | Filesystem path to the template PDF. |
-| `outputPath`        | `string`                      | **required**   | Where to write the generated PDF. |
-| `startDate`         | `Date`                        | **required**   | First date to stamp on the schedule. |
-| `totalPages`        | `number`                      | **required**   | Number of pages in the output PDF. |
-| `datesPerPage`      | `1` \| `2`                    | `1`            | Date slots per page. When `2`, each page advances two calendar days. |
-| `datePositions`     | `Array<{x,y}>`                | **required**   | Coordinates for each date label (bottom-left origin). Must have at least `datesPerPage` entries. |
-| `font`              | `string`                      | `'Helvetica'`  | Built-in font name **or** path to a `.ttf` / `.otf` file. See table below. |
-| `fontSize`          | `number`                      | `12`           | Font size in points. |
-| `textColor`         | `{r,g,b}` (0–1 each)         | black          | RGB colour of the date text. |
-| `templatePageIndex` | `number`                      | `0`            | Zero-based index of the template page to use as the repeating background. |
+| Option              | Type                 | Default       | Description                                                                                      |
+| ------------------- | -------------------- | ------------- | ------------------------------------------------------------------------------------------------ |
+| `templatePath`      | `string`             | **required**  | Filesystem path to the template PDF.                                                             |
+| `outputPath`        | `string`             | **required**  | Where to write the generated PDF.                                                                |
+| `startDate`         | `Date`               | **required**  | First date to stamp on the schedule.                                                             |
+| `totalPages`        | `number`             | **required**  | Number of pages in the output PDF.                                                               |
+| `datesPerPage`      | `1` \| `2`           | `1`           | Date slots per page. When `2`, each page advances two calendar days.                             |
+| `datePositions`     | `Array<{x,y}>`       | **required**  | Coordinates for each date label (bottom-left origin). Must have at least `datesPerPage` entries. |
+| `font`              | `string`             | `'Helvetica'` | Built-in font name **or** path to a `.ttf` / `.otf` file. See table below.                       |
+| `fontSize`          | `number`             | `12`          | Font size in points.                                                                             |
+| `textColor`         | `{r,g,b}` (0–1 each) | black         | RGB colour of the date text.                                                                     |
+| `templatePageIndex` | `number`             | `0`           | Zero-based index of the template page to use as the repeating background.                        |
+| `dateXAnchor`       | `'left' \| 'right'`  | `'left'`      | Horizontal anchor of `datePositions[].x`: left edge or right edge of the rendered text.          |
+| `templatePageReuse` | `boolean`            | `true`        | Reuses one embedded template page across all output pages to reduce file size without resizing.  |
 
 ### Built-in font names
 
 These names map directly to the PDF standard fonts (no extra data is embedded
 in the file, keeping output size minimal):
 
-| Name                    |
-|-------------------------|
-| `Helvetica`             |
-| `HelveticaBold`         |
-| `HelveticaOblique`      |
-| `HelveticaBoldOblique`  |
-| `TimesRoman`            |
-| `TimesRomanBold`        |
-| `TimesRomanItalic`      |
-| `TimesRomanBoldItalic`  |
-| `Courier`               |
-| `CourierBold`           |
-| `CourierOblique`        |
-| `CourierBoldOblique`    |
+| Name                   |
+| ---------------------- |
+| `Helvetica`            |
+| `HelveticaBold`        |
+| `HelveticaOblique`     |
+| `HelveticaBoldOblique` |
+| `TimesRoman`           |
+| `TimesRomanBold`       |
+| `TimesRomanItalic`     |
+| `TimesRomanBoldItalic` |
+| `Courier`              |
+| `CourierBold`          |
+| `CourierOblique`       |
+| `CourierBoldOblique`   |
 
 > **Note:** The built-in fonts use WinAnsi encoding, which fully covers all
 > PT-BR characters used in date strings (ç, ã, á, é, ê, ó, ú, â, à, …).
