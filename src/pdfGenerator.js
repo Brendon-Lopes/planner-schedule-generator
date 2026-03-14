@@ -51,7 +51,17 @@ async function resolveFont(doc, fontOption) {
  * @param {object} opts
  */
 function validateOptions(opts) {
-  const { templatePath, outputPath, startDate, totalPages, datesPerPage, datePositions, templatePageIndex } = opts;
+  const {
+    templatePath,
+    outputPath,
+    startDate,
+    totalPages,
+    datesPerPage,
+    datePositions,
+    templatePageIndex,
+    dateXAnchor,
+    templatePageReuse,
+  } = opts;
 
   if (!templatePath) throw new Error('templatePath is required');
   if (!outputPath) throw new Error('outputPath is required');
@@ -66,7 +76,7 @@ function validateOptions(opts) {
   }
   if (!Array.isArray(datePositions) || datePositions.length < datesPerPage) {
     throw new Error(
-      `datePositions must be an array with at least ${datesPerPage} entry/entries when datesPerPage is ${datesPerPage}`
+      `datePositions must be an array with at least ${datesPerPage} entry/entries when datesPerPage is ${datesPerPage}`,
     );
   }
   for (let i = 0; i < datesPerPage; i++) {
@@ -77,6 +87,12 @@ function validateOptions(opts) {
   }
   if (!Number.isInteger(templatePageIndex) || templatePageIndex < 0) {
     throw new Error('templatePageIndex must be a non-negative integer');
+  }
+  if (dateXAnchor !== 'left' && dateXAnchor !== 'right') {
+    throw new Error("dateXAnchor must be 'left' or 'right'");
+  }
+  if (typeof templatePageReuse !== 'boolean') {
+    throw new Error('templatePageReuse must be a boolean');
   }
 }
 
@@ -123,6 +139,16 @@ function validateOptions(opts) {
  *   Zero-based index of the page inside the template PDF to use as the
  *   repeating background.  Defaults to the first page.
  *
+ * @param {'left' | 'right'} [options.dateXAnchor='left']
+ *   Horizontal anchor for each `datePositions[].x` value.
+ *   - `left`: `x` is the left edge of the date text.
+ *   - `right`: `x` is the right edge of the date text.
+ *
+ * @param {boolean} [options.templatePageReuse=true]
+ *   When true, the template page is embedded once and reused on every output
+ *   page. This keeps visual quality and dimensions unchanged while usually
+ *   producing much smaller files for large page counts.
+ *
  * @returns {Promise<Uint8Array>} The raw bytes of the generated PDF.
  */
 export async function generatePlannerSchedule({
@@ -136,39 +162,68 @@ export async function generatePlannerSchedule({
   fontSize = 12,
   textColor = { r: 0, g: 0, b: 0 },
   templatePageIndex = 0,
+  dateXAnchor = 'left',
+  templatePageReuse = true,
 }) {
-  validateOptions({ templatePath, outputPath, startDate, totalPages, datesPerPage, datePositions, templatePageIndex });
+  validateOptions({
+    templatePath,
+    outputPath,
+    startDate,
+    totalPages,
+    datesPerPage,
+    datePositions,
+    templatePageIndex,
+    dateXAnchor,
+    templatePageReuse,
+  });
 
   const templateBytes = await readFile(templatePath);
   const templateDoc = await PDFDocument.load(templateBytes);
 
   if (templatePageIndex >= templateDoc.getPageCount()) {
     throw new Error(
-      `templatePageIndex ${templatePageIndex} is out of range – template has ${templateDoc.getPageCount()} page(s)`
+      `templatePageIndex ${templatePageIndex} is out of range – template has ${templateDoc.getPageCount()} page(s)`,
     );
   }
 
   const outputDoc = await PDFDocument.create();
   const embeddedFont = await resolveFont(outputDoc, font);
   const color = rgb(textColor.r, textColor.g, textColor.b);
+  const templatePage = templateDoc.getPage(templatePageIndex);
+  const { width: templateWidth, height: templateHeight } = templatePage.getSize();
+  const reusableTemplatePage = templatePageReuse ? await outputDoc.embedPage(templatePage) : null;
 
   let currentDate = new Date(startDate);
 
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-    const [page] = await outputDoc.copyPages(templateDoc, [templatePageIndex]);
-    outputDoc.addPage(page);
+    let page;
+
+    if (templatePageReuse) {
+      page = outputDoc.addPage([templateWidth, templateHeight]);
+      page.drawPage(reusableTemplatePage, {
+        x: 0,
+        y: 0,
+        width: templateWidth,
+        height: templateHeight,
+      });
+    } else {
+      [page] = await outputDoc.copyPages(templateDoc, [templatePageIndex]);
+      outputDoc.addPage(page);
+    }
 
     for (let slot = 0; slot < datesPerPage; slot++) {
       const label = formatDatePtBr(currentDate);
       const { x, y } = datePositions[slot];
+      const textWidth = embeddedFont.widthOfTextAtSize(label, fontSize);
+      const drawX = dateXAnchor === 'right' ? x - textWidth : x;
 
-      page.drawText(label, { x, y, size: fontSize, font: embeddedFont, color });
+      page.drawText(label, { x: drawX, y, size: fontSize, font: embeddedFont, color });
 
       currentDate = addDays(currentDate, 1);
     }
   }
 
-  const outputBytes = await outputDoc.save();
+  const outputBytes = await outputDoc.save({ useObjectStreams: true });
   await writeFile(outputPath, outputBytes);
 
   return outputBytes;

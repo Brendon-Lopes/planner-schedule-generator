@@ -14,7 +14,7 @@ await generatePlannerSchedule({
   outputPath: './output.pdf',
 
   // First date that will appear in the schedule
-  startDate: new Date('2026-03-17'),
+  startDate: new Date(2026, 2, 17),
 
   // How many pages to generate
   totalPages: 7,
